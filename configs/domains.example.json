@@ -1,0 +1,8 @@
+{
+    "kulizh.ru": {
+        "expected_codes": [
+            200
+        ],
+        "retries": 100
+    }
+}

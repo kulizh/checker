@@ -1,0 +1,4 @@
+.env
+/checker
+/domains.json
+/checker.pid
