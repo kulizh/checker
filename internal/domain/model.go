@@ -1,5 +1,7 @@
 package domain
 
+import "time"
+
 type DomainConfig struct {
 	ExpectedCodes []int `json:"expected_codes"`
 	Retries       int   `json:"retries"`
@@ -13,7 +15,8 @@ type CheckResult struct {
 }
 
 type DomainState struct {
-	Status string
-	Code   int
-	Error  string
+	Status         string
+	Code           int
+	Error          string
+	LastNotifiedAt time.Time
 }

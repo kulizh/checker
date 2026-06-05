@@ -1,49 +1,48 @@
 #!/bin/bash
+# Deploy script — builds binary and copies files to remote server.
+# Usage: ./deploy.sh user@host /remote/path
+# Variables (override as needed):
+#   CONFIG     — path to local config (default: domains.json)
+#   REMOTE_DIR — same as $2, can be set via env
 
 set -e
 
-if [ "$#" -ne 2 ]; then
+if [ "$#" -lt 2 ] && [ -z "$REMOTE_DIR" ]; then
   echo "Usage: $0 user@host /remote/path"
+  echo "       REMOTE_DIR=/remote/path $0 user@host"
   exit 1
 fi
 
+REMOTE_HOST="${1}"
+REMOTE_PATH="${2:-$REMOTE_DIR}"
+CONFIG="${CONFIG:-domains.json}"
+
+# Build for linux
 make build-linux
 
-REMOTE_HOST="$1"
-REMOTE_PATH="$2"
-
-FILES=("checker" "start.sh" "stop.sh" "readme.md" ".env")
-
-CONFIG_FILE="configs/domains.example.json"
-TEMP_CONFIG="domains.json"
-
-CLEANUP_REQUIRED=0
-
-# Проверяем, существует ли локальный domains.json
-if [ ! -f "$TEMP_CONFIG" ]; then
-  echo "No local domains.json found → creating temp from example"
-  cp "$CONFIG_FILE" "$TEMP_CONFIG"
-  CLEANUP_REQUIRED=1
-else
-  echo "Using existing domains.json (no temp copy needed)"
+# Ensure config exists
+if [ ! -f "$CONFIG" ]; then
+  if [ -f "configs/domains.example.json" ]; then
+    echo "Copying configs/domains.example.json → $CONFIG"
+    cp configs/domains.example.json "$CONFIG"
+  else
+    echo "ERROR: no $CONFIG found"
+    exit 1
+  fi
 fi
 
-echo "Creating dir $REMOTE_HOST:$REMOTE_PATH..."
+echo "Deploying to $REMOTE_HOST:$REMOTE_PATH"
 ssh "$REMOTE_HOST" "mkdir -p '$REMOTE_PATH'"
 
-echo "Sending files..."
+scp \
+  checker \
+  start.sh \
+  stop.sh \
+  .env \
+  "$CONFIG" \
+  "$REMOTE_HOST:$REMOTE_PATH/"
 
-UPLOAD_FILES=("${FILES[@]}")
-
-if [ -f "$TEMP_CONFIG" ]; then
-  UPLOAD_FILES+=("$TEMP_CONFIG")
-fi
-
-scp "${UPLOAD_FILES[@]}" "$REMOTE_HOST:$REMOTE_PATH/"
-
-if [ "$CLEANUP_REQUIRED" -eq 1 ]; then
-  echo "Cleaning up temp domains.json"
-  rm -f "$TEMP_CONFIG"
-fi
-
-echo "Done."
+echo "Done. On the server:"
+echo "  cd $REMOTE_PATH"
+echo "  # edit .env with your tokens"
+echo "  ./start.sh"

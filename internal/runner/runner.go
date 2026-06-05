@@ -16,7 +16,7 @@ type Runner struct {
 	Interval time.Duration
 }
 
-func New(cfgPath string, interval time.Duration) (*Runner, error) {
+func New(cfgPath string, interval, renotifyAfter time.Duration) (*Runner, error) {
 	cfg, err := config.Load(cfgPath)
 	if err != nil {
 		return nil, err
@@ -33,10 +33,11 @@ func New(cfgPath string, interval time.Duration) (*Runner, error) {
 	}
 
 	worker := &checker.Worker{
-		Config:  cfg,
-		Checker: ch,
-		State:   st,
-		Notify:  tg,
+		Config:        cfg,
+		Checker:       ch,
+		State:         st,
+		Notify:        tg,
+		RenotifyAfter: renotifyAfter,
 	}
 
 	return &Runner{
@@ -51,7 +52,12 @@ func (r *Runner) Start() {
 
 		r.Worker.Run()
 
-		fmt.Printf("cycle finished in %s\n", time.Since(start))
+		elapsed := time.Since(start)
+		if elapsed > r.Interval {
+			fmt.Printf("[runner] cycle took %s (longer than interval %s)\n", elapsed, r.Interval)
+		} else {
+			fmt.Printf("[runner] cycle finished in %s\n", elapsed)
+		}
 
 		time.Sleep(r.Interval)
 	}

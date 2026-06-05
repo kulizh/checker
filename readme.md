@@ -1,46 +1,130 @@
-# Website Monitor
+# Website Checker
 
-Утилита для мониторинга ответа веб-сайта.
----
+Periodically checks HTTP responses of monitored sites and sends Telegram notifications on status changes.
 
-## Принцип работы
-Сервис периодически проверяет HTTP-ответ хоста. Когда он не совпадает с ожидаемым, отправляется сообщение в телеграм. Смена статуса также сопровождается уведомлением.
+## How it works
 
-### Сборка
-Утилита собирается через `make`:
+1. **Startup** — the tool reads `domains.json`, checks every site once, and sends one Telegram message with the full status of all sites ("Sites added to monitoring").
+2. **Regular checks** — every N seconds (set by `-interval`), each site is probed.
+3. **Notifications**:
+   - Site goes DOWN (status code outside `expected_codes`): notification sent immediately.
+   - Site comes back UP: notification sent immediately.
+   - Site stays DOWN: a reminder notification is sent every hour (configurable via `-renotify`).
 
-- `make build` — локальная сборка под текущую ОС
-- `make linux-build` — сборка под Linux (`GOOS=linux GOARCH=amd64`)
+State is kept in memory — no database or files are needed.
 
-## Запуск на сервере
-Запуск:
-```bash
- ./checker -config configs/domains.example.json -interval 30s
-```
-Где `-config` — путь к JSON-файлу с доменами, а `-interval` — интервал снятия проб.
-
-При запуске через `start.sh` в директории создаётся файл `checker.pid` с PID запущенного процесса. Он является основным индикатором работы утилиты.
-
-## Установка на сервер
-Скрипт `deploy.sh` собирает linux-билд, копирует на сервер нужные файлы по SSH и размещает их в заданной директории. 
+## Quick start
+### 1. Configure
 
 ```bash
-./deploy.sh user@host /remote/path
+cp .env.example .env
+# Edit .env: fill in TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID
 ```
 
-Список передаваемых файлов:
-- `checker`
-- `start.sh`
-- `stop.sh`
-- `readme.md`
-- `.env`
-- `domains.json`
+Edit `domains.json` with the sites you want to monitor:
 
-Если файла `domains.json` нет, будет создана копия из `config/domains.example.json`. 
+```json
+{
+    "example.com": {
+        "expected_codes": [200],
+        "retries": 3
+    },
+    "api.example.org": {
+        "expected_codes": [200, 301],
+        "retries": 2
+    }
+}
+```
 
-## Параметры запуска
-Переменные окружения содержат:
+Each key is a domain name. `expected_codes` is the list of acceptable HTTP status codes. `retries` is how many times to retry on error before marking the site as DOWN.
 
-- `TELEGRAM_TOKEN` — токен телеграм-бота. По умолчанию пустой.
-- `TELEGRAM_CHAT_ID` — ID чата для отправки уведомлений. По умолчанию пустой.
-- `PROXY` — адрес для проксирования (например, при отправке уведомлений через телеграм)
+### 2. Run locally
+
+```bash
+make run
+```
+
+Or directly:
+
+```bash
+go run ./cmd/checker -config domains.json -interval 30s -renotify 1h
+```
+
+## Deployment
+
+### Option A: systemd (recommended for servers)
+
+1. Build for Linux:
+
+   ```bash
+   make build-linux
+   ```
+
+2. Copy files to the server:
+
+   ```bash
+   # Example:
+   scp checker start.sh stop.sh .env domains.json user@server:/opt/checker/
+   ```
+
+3. Create a systemd unit file `/etc/systemd/system/checker.service`:
+
+   ```ini
+   [Unit]
+   Description=Website Checker
+   After=network.target
+
+   [Service]
+   Type=simple
+   WorkingDirectory=/opt/checker
+   ExecStart=/opt/checker/checker --config /opt/checker/domains.json --interval 30s --renotify 1h
+   Restart=on-failure
+   RestartSec=10
+   User=root
+   Group=root
+
+   [Install]
+   WantedBy=multi-user.target
+   ```
+
+4. Start the service:
+
+   ```bash
+   systemctl daemon-reload
+   systemctl enable checker
+   systemctl start checker
+   systemctl status checker
+   ```
+
+### Option B: deploy script
+
+```bash
+./deploy.sh user@host /opt/checker
+```
+
+This builds the binary, copies all needed files via SCP, and prints instructions.
+
+### Option C: manual start
+
+```bash
+./start.sh    # starts in background, writes checker.pid
+./stop.sh     # stops by PID from checker.pid
+```
+
+## Command-line flags
+
+| Flag            | Default   | Description                            |
+|-----------------|-----------|----------------------------------------|
+| `-config`       | `domains.json` | Path to domains configuration     |
+| `-interval`     | `30s`     | Check interval (e.g. `10s`, `1m`)      |
+| `-renotify`     | `1h`      | Re-notify interval for DOWN sites      |
+
+## Environment variables
+
+| Variable              | Required | Description                                   |
+|-----------------------|----------|-----------------------------------------------|
+| `TELEGRAM_BOT_TOKEN`  | yes      | Telegram bot token                            |
+| `TELEGRAM_CHAT_ID`    | yes      | Telegram chat ID for notifications            |
+| `PROXY`               | no       | SOCKS5 proxy address (e.g. `127.0.0.1:9050`) |
+
+Variables are loaded from a `.env` file in the working directory.

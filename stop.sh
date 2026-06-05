@@ -1,17 +1,19 @@
 #!/bin/bash
 
-if [ ! -f checker.pid ]; then
-    echo "checker.pid not found."
-    exit 1
+PID_FILE="checker.pid"
+
+if [ ! -f "$PID_FILE" ]; then
+  echo "PID file not found ($PID_FILE)"
+  exit 1
 fi
 
-PID=$(cat checker.pid)
+PID=$(cat "$PID_FILE")
 
-if kill -0 $PID > /dev/null 2>&1; then
-    kill $PID
-    echo "Kill sent to PID $PID"
-    rm checker.pid
+if kill -0 "$PID" 2>/dev/null; then
+  kill "$PID"
+  echo "Stopped (PID $PID)"
 else
-    echo "PID $PID not found."
-    rm checker.pid
+  echo "Process $PID not running"
 fi
+
+rm -f "$PID_FILE"
