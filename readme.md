@@ -50,6 +50,35 @@ Or directly:
 go run ./cmd/checker -config domains.json -interval 30s -renotify 1h
 ```
 
+## Managing domains with Go helper
+
+Use the provided `domains-helper` binary to add or remove sites from `domains.json` and automatically restart the local checker service.
+
+- Add a site:
+
+```bash
+./domains-helper add example.com 200,301
+```
+
+- Remove a site:
+
+```bash
+./domains-helper remove example.com
+```
+
+Notes:
+
+- `domains.json` must already exist when running these commands.
+- `add` fails if the site already exists.
+- `remove` fails if the site is not present.
+- The helper runs `./stop.sh` and then `./start.sh` after a successful change.
+
+You can build the helper with:
+
+```bash
+go build -o domains-helper ./cmd/domains-helper
+```
+
 ## Deployment
 
 ### Option A: systemd (recommended for servers)

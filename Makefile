@@ -6,6 +6,11 @@ BUILD_DIR=dist
 build:
 	go mod tidy
 	go build -o $(APP_NAME) ./cmd/checker
+	go build -o domains-helper ./cmd/domains-helper
+
+build-helper:
+	go mod tidy
+	go build -o domains-helper ./cmd/domains-helper
 
 build-linux:
 	GOOS=linux GOARCH=amd64 go build -o $(APP_NAME) ./cmd/checker
