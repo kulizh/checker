@@ -128,11 +128,14 @@ func (w *Worker) baseline() {
 
 			w.State.Set(d, newState)
 
-			status := "OK"
+			statusLine := fmt.Sprintf("✅ %s — %d", d, res.Code)
 			if !res.Up {
-				status = "Err"
+				expected := formatExpected(c.ExpectedCodes)
+				statusLine = fmt.Sprintf("❌ %s — %d, expected %s", d, res.Code, expected)
+				if res.Error != "" {
+					statusLine += fmt.Sprintf(" (%s)", res.Error)
+				}
 			}
-			statusLine := fmt.Sprintf("%s: %d %s", d, res.Code, status)
 			fmt.Println("[baseline]", statusLine)
 
 			mu.Lock()
@@ -144,7 +147,7 @@ func (w *Worker) baseline() {
 	wg.Wait()
 
 	// Send one summary notification
-	msg := "Sites added to monitoring:\n"
+	msg := "Monitoring launched:\n\n"
 	for _, l := range lines {
 		msg += l + "\n"
 	}

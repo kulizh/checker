@@ -20,7 +20,7 @@ CONFIG="${CONFIG:-domains.json}"
 # Build for linux
 make build-linux
 
-# Ensure config exists
+# Ensure config exists, but do not overwrite an existing config file
 if [ ! -f "$CONFIG" ]; then
   if [ -f "configs/domains.example.json" ]; then
     echo "Copying configs/domains.example.json → $CONFIG"
@@ -29,6 +29,8 @@ if [ ! -f "$CONFIG" ]; then
     echo "ERROR: no $CONFIG found"
     exit 1
   fi
+else
+  echo "Using existing $CONFIG"
 fi
 
 echo "Deploying to $REMOTE_HOST:$REMOTE_PATH"
@@ -38,9 +40,15 @@ scp \
   checker \
   start.sh \
   stop.sh \
-  .env \
-  "$CONFIG" \
+  .env.example \
   "$REMOTE_HOST:$REMOTE_PATH/"
+
+remote_config="$REMOTE_PATH/$(basename "$CONFIG")"
+if ssh "$REMOTE_HOST" "test -f '$remote_config'"; then
+  echo "Remote config exists at $remote_config, keeping existing config"
+else
+  scp "$CONFIG" "$REMOTE_HOST:$REMOTE_PATH/"
+fi
 
 echo "Done. On the server:"
 echo "  cd $REMOTE_PATH"
