@@ -2,6 +2,8 @@ package checker
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -58,25 +60,32 @@ func (w *Worker) Run() {
 			case !exists:
 				// First check after baseline — notify immediately if DOWN
 				if !res.Up {
-					msg := fmt.Sprintf("[DOWN] %s — status code %d (%s)", d, res.Code, res.Error)
+					expected := formatExpected(c.ExpectedCodes)
+					msg := fmt.Sprintf("🚨 Status changed: %s %s → %d", d, expected, res.Code)
+					if res.Error != "" {
+						msg += fmt.Sprintf(" (%s)", res.Error)
+					}
 					w.tryNotify(d, msg, now, &newState)
 				}
 
 			case prev.Status != newState.Status:
 				// Status changed — notify immediately
-				label := "DOWN"
-				if res.Up {
-					label = "UP"
+				if !res.Up {
+					expected := formatExpected(c.ExpectedCodes)
+					msg := fmt.Sprintf("🚨 Status changed: %s %s → %d", d, expected, res.Code)
+					if res.Error != "" {
+						msg += fmt.Sprintf(" (%s)", res.Error)
+					}
+					w.tryNotify(d, msg, now, &newState)
+				} else {
+					msg := fmt.Sprintf("✅ %s is %d", d, res.Code)
+					w.tryNotify(d, msg, now, &newState)
 				}
-				msg := fmt.Sprintf("[%s] %s — status code %d", label, d, res.Code)
-				if res.Error != "" {
-					msg += fmt.Sprintf(" (%s)", res.Error)
-				}
-				w.tryNotify(d, msg, now, &newState)
 
 			case !res.Up && now.Sub(prev.LastNotifiedAt) >= w.RenotifyAfter:
 				// Still down and re-notify interval passed
-				msg := fmt.Sprintf("[DOWN REMINDER] %s — still down after %s (code %d)", d, w.RenotifyAfter, res.Code)
+				expected := formatExpected(c.ExpectedCodes)
+				msg := fmt.Sprintf("[Reminder] %s is still %d, expected %s", d, res.Code, expected)
 				if res.Error != "" {
 					msg += fmt.Sprintf(" (%s)", res.Error)
 				}
@@ -119,13 +128,11 @@ func (w *Worker) baseline() {
 
 			w.State.Set(d, newState)
 
-			statusLine := fmt.Sprintf("  %s — %s", d, newState.Status)
+			status := "OK"
 			if !res.Up {
-				statusLine += fmt.Sprintf(" (code %d)", res.Code)
-				if res.Error != "" {
-					statusLine += fmt.Sprintf(" [%s]", res.Error)
-				}
+				status = "Err"
 			}
+			statusLine := fmt.Sprintf("%s: %d %s", d, res.Code, status)
 			fmt.Println("[baseline]", statusLine)
 
 			mu.Lock()
@@ -154,4 +161,12 @@ func (w *Worker) tryNotify(domainName, msg string, now time.Time, state *domain.
 		return
 	}
 	state.LastNotifiedAt = now
+}
+
+func formatExpected(codes []int) string {
+	parts := make([]string, len(codes))
+	for i, c := range codes {
+		parts[i] = strconv.Itoa(c)
+	}
+	return strings.Join(parts, ", ")
 }
